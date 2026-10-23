@@ -63,18 +63,8 @@ main{flex:1;padding:18px 16px 8px}
 .fb button{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:8px;padding:3px 9px;font:inherit;font-size:12.5px;cursor:pointer}
 .fb button.on{border-color:var(--brand-2);color:var(--brand-2);background:var(--brand-soft)}
 .err{color:#b3261e}
-.webbtn{margin-top:12px;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--brand-2);background:var(--brand-soft);color:var(--brand-2);border-radius:9px;padding:6px 12px;font:inherit;font-size:13.5px;cursor:pointer}
-.webbtn svg{width:15px;height:15px}
-.webbtn:disabled{opacity:.5;cursor:default}
-.webhint{font-size:12px;color:var(--muted);margin-top:4px}
-.bot .bubble.web{border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
-.webtag{display:inline-block;font-size:12px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:2px 8px}
-.webnote{font-size:13px;color:var(--warn);margin:6px 0 4px}
-.srcs{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;font-size:13.5px}
-.srcs b{display:block;font-size:12.5px;color:var(--muted);margin-bottom:2px}
-.srcs ol{margin:0;padding-left:1.3em}
-.srcs li{margin:.2em 0}
-.srcs .meta{color:var(--muted);font-size:12px}
+.webref{margin-top:10px;padding-top:7px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--muted)}
+.webref a{color:var(--muted)}
 footer{position:sticky;bottom:0;background:linear-gradient(to top,var(--bg) 70%,transparent);padding:10px 16px calc(12px + env(safe-area-inset-bottom))}
 .composer{display:flex;gap:8px;align-items:flex-end;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:8px 8px 8px 14px;box-shadow:var(--shadow)}
 .composer:focus-within{border-color:var(--brand-2)}
@@ -212,42 +202,25 @@ function addFeedback(box, logId){
 function askCode(){
   return new Promise(res => { const d=$("#codeDlg"); $("#codeIn").value=""; d.showModal(); d.onclose=()=>{ const v=$("#codeIn").value.trim(); if(v) store.set("esc_code",v); res(v); }; });
 }
-/* ----- 웹에서 더 찾아보기(근거 자료에 없을 때 공식 사이트만 검색) ----- */
-const WEB_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
-function addWebButton(box, question){
-  const b=document.createElement("button"); b.type="button"; b.className="webbtn";
-  b.innerHTML=WEB_ICON+"웹에서 더 찾아보기 (공식 사이트)";
-  b.onclick=()=>{ if(busy) return; b.disabled=true; ask(question,{web:true}); };
-  const h=document.createElement("div"); h.className="webhint";
-  h.textContent="국가법령정보센터·교육부·대전광역시교육청 등 공식 사이트만 검색합니다.";
-  box.appendChild(b); box.appendChild(h);
-}
-function srcHtml(src){
-  const ok=(src||[]).filter(s=>/^https?:\/\//.test(s.url||""));
+/* ----- 웹을 참고해 답했으면 맨 아래에 참고한 웹사이트 이름만 한 줄로 ----- */
+function webRef(list){
+  const ok=(list||[]).filter(x=>/^https?:\/\//.test(x.url||""));
   if(!ok.length) return "";
-  return '<div class="srcs"><b>출처(공식 사이트)</b><ol>'+ok.map(s=>'<li><a href="'+esc(s.url)+'" target="_blank" rel="noopener">'+
-    esc(s.title||s.url)+'</a> <span class="meta">'+esc(s.section||"")+'</span></li>').join("")+'</ol></div>';
-}
-const WEB_LABEL=/^※\s*등록된 근거 자료가 아니라[^\n]*\n*/;
-function webHtml(answer, src){
-  return '<span class="webtag">공식 사이트 웹 검색 결과</span>'+
-    '<p class="webnote">등록된 근거 자료가 아니라 공식 사이트를 검색해 찾은 내용입니다. 업무 처리 전 원문·공문으로 꼭 확인하세요.</p>'+
-    md(noCite(answer.replace(WEB_LABEL,"")))+srcHtml(src);
+  return '<div class="webref">참고한 웹사이트: '+ok.map(x=>'<a href="'+esc(x.url)+'" target="_blank" rel="noopener" title="'+esc(x.title||"")+'">'+
+    esc(x.site||x.url)+'</a>').join(" · ")+'</div>';
 }
 
-async function ask(text, opts={}){
-  const web=!!opts.web;
-  if(busy) return; busy=true; sendBtn.disabled=true; if(!web){ q.value=""; grow(); }
-  addMsg("user", web ? "웹에서 더 찾아보기: "+text : text);
+async function ask(text){
+  if(busy) return; busy=true; sendBtn.disabled=true; q.value=""; grow();
+  addMsg("user", text);
   const typing = t => '<span class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span>&nbsp;'+esc(t)+'</span>';
-  let answer="", sources=[], logId=null, fin=null, status=web?"공식 사이트를 검색하고 있어요":"근거 자료를 찾고 있어요";
+  let answer="", logId=null, fin=null, status="근거 자료를 찾고 있어요";
   const box = addMsg("bot", typing(status));
-  if(web) box.classList.add("web");
-  const paint = () => { box.innerHTML = answer ? (web ? webHtml(answer, []) : md(noCite(answer,true))) : typing(status); };
+  const paint = () => { box.innerHTML = answer ? md(noCite(answer,true)) : typing(status); };
   try{
     for(let attempt=0; attempt<2; attempt++){
       const r = await fetch(API, { method:"POST", headers:{ "content-type":"application/json", "x-access-code": store.get("esc_code")||"" },
-        body: JSON.stringify(web ? { question:text, history:[], web:true } : { question:text, history, ...(PROVIDER?{provider:PROVIDER}:{}) }) });
+        body: JSON.stringify({ question:text, history, ...(PROVIDER?{provider:PROVIDER}:{}) }) });
       if(r.status===401){ const j=await r.json().catch(()=>({})); if(j.need_code && attempt===0 && await askCode()) continue; throw new Error(j.error||"접속 코드가 필요합니다."); }
       if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||("오류 "+r.status)); }
       const reader=r.body.getReader(), dec=new TextDecoder(); let buf="";
@@ -258,9 +231,8 @@ async function ask(text, opts={}){
           const blk=buf.slice(0,k); buf=buf.slice(k+2);
           const ev=(blk.match(/^event: (.*)$/m)||[])[1]; const dl=(blk.match(/^data: (.*)$/m)||[])[1]; if(!dl) continue;
           const data=JSON.parse(dl);
-          if(ev==="sources") sources=data;
-          else if(ev==="status"){ status=data.text; if(!answer) paint(); }
-          else if(ev==="reset"){ answer=""; paint(); }          // 더 찾아보기로 해서 쓰던 글을 지움
+          if(ev==="status"){ status=data.text; if(!answer) paint(); }
+          else if(ev==="reset"){ answer=""; paint(); }          // 자료를 더 찾느라 쓰던 글을 지움
           else if(ev==="delta"){ answer+=data.t; paint(); }
           else if(ev==="error") throw new Error(data.message);
           else if(ev==="done"){ fin=data; logId=data.log_id; }
@@ -269,12 +241,10 @@ async function ask(text, opts={}){
       break;
     }
     if(!answer) answer="답변을 만들지 못했어요. 질문을 조금 더 구체적으로 적어 주세요.";
-    box.innerHTML = web ? webHtml(answer, sources) : md(noCite(answer));
+    box.innerHTML = md(noCite(answer)) + webRef(fin && fin.web);
     if(PROVIDER&&fin&&fin.model) box.insertAdjacentHTML("beforeend",`<div class="model">답변 모델: ${esc(fin.model)}</div>`);
     addFeedback(box, logId);
-    if(!web && fin && fin.need_web) addWebButton(box, text);
-    // 웹 검색 결과는 근거 자료가 아니므로 다음 질문의 대화 맥락에 넣지 않는다
-    if(!web){ history.push({q:text, a:answer}); if(history.length>3) history=history.slice(-3); }
+    history.push({q:text, a:answer}); if(history.length>3) history=history.slice(-3);
   }catch(e){
     box.innerHTML = (answer?md(noCite(answer)):"") + `<p class="err">${esc(String(e.message||e))}</p>`;
   }finally{
